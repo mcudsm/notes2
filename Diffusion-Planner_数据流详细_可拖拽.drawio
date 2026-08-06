@@ -1,6 +1,6 @@
 <mxfile host="app.diagrams.net" agent="claude">
   <diagram name="DP数据流详细（可拖拽）" id="dp_detail_drawio">
-    <mxGraphModel dx="3290" dy="1835" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1500" pageHeight="1600" math="0" shadow="0">
+    <mxGraphModel dx="990" dy="544" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2339" pageHeight="3300" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
@@ -20,10 +20,10 @@
           <mxGeometry height="240" width="1010" x="250" y="750" as="geometry" />
         </mxCell>
         <mxCell id="bg_modl" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff7cc;strokeColor=#c9b347;verticalAlign=top;fontStyle=1;fontSize=12;" value="model  (Diffusion_Planner: Encoder + Decoder/DiT)" vertex="1">
-          <mxGeometry height="310" width="1010" x="250" y="1020" as="geometry" />
+          <mxGeometry height="560" width="1010" x="250" y="1020" as="geometry" />
         </mxCell>
         <mxCell id="bg_plan" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3d9f3;strokeColor=#b373b3;verticalAlign=top;fontStyle=1;fontSize=12;" value="planner.py  (推理入口)" vertex="1">
-          <mxGeometry height="130" width="430" x="540" y="1360" as="geometry" />
+          <mxGeometry height="130" width="430" x="520" y="1660" as="geometry" />
         </mxCell>
         <mxCell id="ego" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dbeeff;strokeColor=#5a86b8;" value="ego_process.py&#xa;get_ego_past:11 [21,7]&#xa;get_ego_future:53 [80,3]&#xa;calc_additional:67 [10]" vertex="1">
           <mxGeometry height="80" width="200" x="270" y="100" as="geometry" />
@@ -56,13 +56,13 @@
           <mxGeometry height="60" width="200" x="270" y="490" as="geometry" />
         </mxCell>
         <mxCell id="nm" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e3f7e3;strokeColor=#4a9a4a;" value="normalizer.py&#xa;ObsNormalizer:51&#xa;StateNormalizer:18" vertex="1">
-          <mxGeometry height="60" width="200" x="850" y="490" as="geometry" />
+          <mxGeometry height="60" width="200" x="910" y="470" as="geometry" />
         </mxCell>
-        <mxCell id="loss" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3eafa;strokeColor=#7a4fb0;" value="loss.py&#xa;diffusion_loss_func:8&#xa;all_gt [B,11,81,4]&#xa;xT = α·gt + σ·ε&#xa;→ score [B,11,80,4]&#xa;→ neighbor_loss + ego_loss" vertex="1">
+        <mxCell id="loss" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3eafa;strokeColor=#7a4fb0;" value="loss.py&lt;br&gt;diffusion_loss_func:8&lt;br&gt;all_gt [B,11,81,4]--ego和nei的当前及未来st&lt;br&gt;xT = α·gt + σ·ε --前向加噪（未来80帧）&lt;br&gt;推理出→ score [B,11,80,4]&lt;br&gt;由结果计算损失→ neighbor_loss + ego_loss" vertex="1">
           <mxGeometry height="90" width="370" x="570" y="620" as="geometry" />
         </mxCell>
-        <mxCell id="back" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666;" value="backward" vertex="1">
-          <mxGeometry height="50" width="110" x="290" y="640" as="geometry" />
+        <mxCell id="back" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666;" value="&lt;div&gt;train_epoch.py&lt;/div&gt;backward" vertex="1">
+          <mxGeometry height="50" width="110" x="335" y="590" as="geometry" />
         </mxCell>
         <mxCell id="sde" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe9d6;strokeColor=#b56a30;" value="sde.py&#xa;VPSDE_linear.marginal_prob:93&#xa;α·x+σ·ε&#xa;(βmin0.1 / βmax20)" vertex="1">
           <mxGeometry height="80" width="200" x="290" y="800" as="geometry" />
@@ -74,25 +74,25 @@
           <mxGeometry height="90" width="240" x="840" y="800" as="geometry" />
         </mxCell>
         <mxCell id="dp2" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff1b3;strokeColor=#9c8a1f;" value="diffusion_planner.py&#xa;Diffusion_Planner.forward:20&#xa;encoder → decoder" vertex="1">
-          <mxGeometry height="70" width="200" x="560" y="1060" as="geometry" />
+          <mxGeometry height="70" width="200" x="510" y="1060" as="geometry" />
         </mxCell>
         <mxCell id="enc" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff1b3;strokeColor=#9c8a1f;" value="encoder.py&#xa;Encoder.forward:32&#xa;10子编码器→FusionEncoder&#xa;→ encoding [B,107,192]" vertex="1">
-          <mxGeometry height="80" width="220" x="290" y="1160" as="geometry" />
+          <mxGeometry height="80" width="220" x="270" y="1210" as="geometry" />
         </mxCell>
         <mxCell id="dec" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff1b3;strokeColor=#9c8a1f;" value="decoder.py&#xa;Decoder.forward:43&#xa;解包 encoding:92→cross_c&#xa;注入 xT→DiT (训练score/推理dpm)" vertex="1">
-          <mxGeometry height="80" width="220" x="560" y="1160" as="geometry" />
+          <mxGeometry height="80" width="220" x="710" y="1210" as="geometry" />
         </mxCell>
         <mxCell id="dit" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff1b3;strokeColor=#9c8a1f;" value="dit.py&#xa;DiT.forward:224&#xa;3×DiTBlock+FinalLayer&#xa;→ score [B,11,324]" vertex="1">
-          <mxGeometry height="70" width="220" x="430" y="1270" as="geometry" />
+          <mxGeometry height="70" width="220" x="880" y="1450" as="geometry" />
         </mxCell>
         <mxCell id="rtx" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff1b3;strokeColor=#9c8a1f;" value="RouteEncoder:158&#xa;route_lanes→[B,192]→y" vertex="1">
-          <mxGeometry height="60" width="200" x="850" y="1160" as="geometry" />
+          <mxGeometry height="60" width="200" x="1030" y="1170" as="geometry" />
         </mxCell>
         <mxCell id="pl" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3e6f3;strokeColor=#8a3c8a;" value="planner.py&#xa;compute_planner_trajectory:117&#xa;outputs_to_trajectory:107" vertex="1">
-          <mxGeometry height="60" width="370" x="570" y="1400" as="geometry" />
+          <mxGeometry height="60" width="370" x="550" y="1700" as="geometry" />
         </mxCell>
         <mxCell id="traj" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666;" value="Trajectory [80,3]" vertex="1">
-          <mxGeometry height="50" width="200" x="650" y="1500" as="geometry" />
+          <mxGeometry height="50" width="200" x="630" y="1800" as="geometry" />
         </mxCell>
         <mxCell id="e1" edge="1" parent="1" source="dp" style="edgeStyle=orthogonalEdgeStyle;html=1;" target="ego">
           <mxGeometry relative="1" as="geometry" />
@@ -110,10 +110,20 @@
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="e6" edge="1" parent="1" source="ag" style="edgeStyle=orthogonalEdgeStyle;html=1;" target="ut">
-          <mxGeometry relative="1" as="geometry" />
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="950" y="80" />
+              <mxPoint x="370" y="80" />
+            </Array>
+          </mxGeometry>
         </mxCell>
         <mxCell id="e7" edge="1" parent="1" source="mp" style="edgeStyle=orthogonalEdgeStyle;html=1;" target="ut">
-          <mxGeometry relative="1" as="geometry" />
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="950" y="280" />
+              <mxPoint x="370" y="280" />
+            </Array>
+          </mxGeometry>
         </mxCell>
         <mxCell id="e10" edge="1" parent="1" source="dp" style="edgeStyle=orthogonalEdgeStyle;html=1;fontSize=10;" target="ds" value=".npz">
           <mxGeometry relative="1" as="geometry" />
@@ -143,16 +153,31 @@
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="e22" edge="1" parent="1" source="sde" style="edgeStyle=orthogonalEdgeStyle;html=1;dashed=1;fontSize=10;" target="loss" value="mean,std → xT">
-          <mxGeometry relative="1" as="geometry" />
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="390" y="730" />
+              <mxPoint x="755" y="730" />
+            </Array>
+          </mxGeometry>
         </mxCell>
         <mxCell id="e23" edge="1" parent="1" source="loss" style="edgeStyle=orthogonalEdgeStyle;html=1;fontSize=10;" target="back" value="loss dict">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="e30" edge="1" parent="1" source="loss" style="edgeStyle=orthogonalEdgeStyle;html=1;fontSize=10;" target="dp2" value="merged_inputs(xT,t)">
-          <mxGeometry relative="1" as="geometry" />
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="740" y="930" />
+              <mxPoint x="610" y="930" />
+            </Array>
+          </mxGeometry>
         </mxCell>
         <mxCell id="e31" edge="1" parent="1" source="dp2" style="edgeStyle=orthogonalEdgeStyle;html=1;fontSize=10;" target="enc" value="inputs">
           <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="vuOhmQr4WCSQjWzu7fJm-3" connectable="0" parent="e31" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=12;" value="neighbor_agents_past/static/lanes/限速" vertex="1">
+          <mxGeometry relative="1" x="0.5211" y="-2" as="geometry">
+            <mxPoint x="2" y="-12" as="offset" />
+          </mxGeometry>
         </mxCell>
         <mxCell id="e32" edge="1" parent="1" source="dp2" style="edgeStyle=orthogonalEdgeStyle;html=1;fontSize=10;" target="dec" value="encoding+inputs">
           <mxGeometry relative="1" as="geometry" />
@@ -179,7 +204,13 @@
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="e50" edge="1" parent="1" source="pl" style="edgeStyle=orthogonalEdgeStyle;html=1;dashed=1;strokeColor=#8a3c8a;fontSize=10;" target="dp" value="PlannerInput (observation_adapter)">
-          <mxGeometry relative="1" as="geometry" />
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="754.9" y="950" />
+              <mxPoint x="500" y="950" />
+              <mxPoint x="500" y="140" />
+            </Array>
+          </mxGeometry>
         </mxCell>
         <mxCell id="e51" edge="1" parent="1" source="pl" style="edgeStyle=orthogonalEdgeStyle;html=1;dashed=1;strokeColor=#8a3c8a;fontSize=10;" target="nm" value="inputs">
           <mxGeometry relative="1" as="geometry" />
@@ -198,6 +229,9 @@
         </mxCell>
         <mxCell id="e56" edge="1" parent="1" source="pl" style="edgeStyle=orthogonalEdgeStyle;html=1;dashed=1;strokeColor=#8a3c8a;fontSize=10;" target="traj" value="outputs_to_trajectory">
           <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="vuOhmQr4WCSQjWzu7fJm-2" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="Text" vertex="1">
+          <mxGeometry height="30" width="60" x="760" y="1050" as="geometry" />
         </mxCell>
       </root>
     </mxGraphModel>
