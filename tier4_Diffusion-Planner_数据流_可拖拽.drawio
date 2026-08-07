@@ -188,69 +188,87 @@
     </mxGraphModel>
   </diagram>
   <diagram name="推理" id="t4_infer">
-    <mxGraphModel dx="1800" dy="1400" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1700" pageHeight="1400" math="0" shadow="0">
+    <mxGraphModel dx="1155" dy="635" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1700" pageHeight="1400" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
-        <mxCell id="t2" value="tier4/Diffusion-Planner 推理数据流（validate_model → _forward_inference → x_start / flow_matching 两分支）" style="text;html=1;align=center;fontSize=16;fontStyle=1;" vertex="1" parent="1">
-          <mxGeometry x="200" y="10" width="1300" height="30" as="geometry" />
+        <mxCell id="t2" parent="1" style="text;html=1;align=center;fontSize=16;fontStyle=1;" value="tier4/Diffusion-Planner 推理数据流（validate_model → _forward_inference → x_start / flow_matching 两分支）" vertex="1">
+          <mxGeometry height="30" width="1300" x="200" y="10" as="geometry" />
         </mxCell>
-        <mxCell id="vm" value="◄输入← val_loader batch dict [1,...] + model/ema&#xa;►输出→ {&quot;prediction&quot;[1,321,80,4], &quot;turn_indicator_logit&quot;[1,5]} + valid_loss_ego(scalar) + epdms metrics&#xa;validate_model:277 (validate_model.py)&#xa;_prepare_validation_inputs:49 → 模型 → _epdms_eval_metrics:204" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3e6f3;strokeColor=#8a3c8a;" vertex="1" parent="1">
-          <mxGeometry x="500" y="70" width="500" height="120" as="geometry" />
+        <mxCell id="vm" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3e6f3;strokeColor=#8a3c8a;" value="◄输入← val_loader batch dict [1,...] + model/ema&#xa;►输出→ {&quot;prediction&quot;[1,321,80,4], &quot;turn_indicator_logit&quot;[1,5]} + valid_loss_ego(scalar) + epdms metrics&#xa;validate_model:277 (validate_model.py)&#xa;_prepare_validation_inputs:49 → 模型 → _epdms_eval_metrics:204" vertex="1">
+          <mxGeometry height="120" width="500" x="500" y="70" as="geometry" />
         </mxCell>
-        <mxCell id="fi" value="◄输入← inputs dict[1,...](归一化) + encoder_outputs&#xa;►输出→ {&quot;prediction&quot;[1,321,80,4]}&#xa;Decoder._forward_inference:523 (decoder.py:275)&#xa;reshape + 按 model_type(x_start/flow_matching) 分发" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff1b3;strokeColor=#9c8a1f;" vertex="1" parent="1">
-          <mxGeometry x="530" y="250" width="440" height="100" as="geometry" />
+        <mxCell id="fi" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff1b3;strokeColor=#9c8a1f;" value="◄输入← inputs dict[1,...](归一化) + encoder_outputs&#xa;►输出→ {&quot;prediction&quot;[1,321,80,4]}&#xa;Decoder._forward_inference:523 (decoder.py:275)&#xa;reshape + 按 model_type(x_start/flow_matching) 分发" vertex="1">
+          <mxGeometry height="100" width="440" x="70" y="250" as="geometry" />
         </mxCell>
-        <mxCell id="e60" style="edgeStyle=orthogonalEdgeStyle;html=1;" edge="1" parent="1" source="vm" target="fi">
+        <mxCell id="e60" edge="1" parent="1" source="vm" style="edgeStyle=orthogonalEdgeStyle;html=1;" target="fi">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <!-- 分支 A: x_start (dpm_solver) -->
-        <mxCell id="ixs" value="◄输入← (self.dit, xT[1,321,324],&#xa;   other_model_params={cross_c[1,N,hidden], neighbor_current_mask[1,321]},&#xa;   dpm_solver_params={prefix_mask}, model_wrapper_params={classifier_fn, guidance_scale})&#xa;►输出→ x0[1,321,80,4] (归一化空间)&#xa;Decoder._inference_x_start:439&#xa;xT=cat([current_states[1,321,4], randn*0.5])[1,321,324] + prefix_mask + anchor + 可选 classifier guidance" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff1b3;strokeColor=#9c8a1f;" vertex="1" parent="1">
-          <mxGeometry x="60" y="420" width="460" height="160" as="geometry" />
+        <mxCell id="MmXVoZgHaEW4HOVnoSEA-1" connectable="0" parent="e60" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=12;" value="decoder" vertex="1">
+          <mxGeometry relative="1" x="0.2115" y="-2" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
         </mxCell>
-        <mxCell id="dpm_s" value="◄输入← (model=DiT, x_T[1,321,324], other_model_params, steps)&#xa;►输出→ x0[1,321,324]&#xa;dpm_solver_pytorch: NoiseScheduleVP:4 / model_wrapper:82&#xa;DPM_Solver.sample:442 (steps, prefix_mask, skip_type)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe9d6;strokeColor=#b56a30;" vertex="1" parent="1">
-          <mxGeometry x="60" y="640" width="460" height="100" as="geometry" />
+        <mxCell id="ixs" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff1b3;strokeColor=#9c8a1f;" value="◄输入← (self.dit, xT[1,321,324],&#xa;   other_model_params={cross_c[1,N,hidden], neighbor_current_mask[1,321]},&#xa;   dpm_solver_params={prefix_mask}, model_wrapper_params={classifier_fn, guidance_scale})&#xa;►输出→ x0[1,321,80,4] (归一化空间)&#xa;Decoder._inference_x_start:439&#xa;xT=cat([current_states[1,321,4], randn*0.5])[1,321,324] + prefix_mask + anchor + 可选 classifier guidance" vertex="1">
+          <mxGeometry height="160" width="460" x="60" y="420" as="geometry" />
         </mxCell>
-        <mxCell id="e61" style="edgeStyle=orthogonalEdgeStyle;html=1;" edge="1" parent="1" source="fi" target="ixs">
+        <mxCell id="dpm_s" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe9d6;strokeColor=#b56a30;" value="◄输入← (model=DiT, x_T[1,321,324], other_model_params, steps)&#xa;►输出→ x0[1,321,324]&#xa;dpm_solver_pytorch: NoiseScheduleVP:4 / model_wrapper:82&#xa;DPM_Solver.sample:442 (steps, prefix_mask, skip_type)" vertex="1">
+          <mxGeometry height="100" width="460" x="60" y="810" as="geometry" />
+        </mxCell>
+        <mxCell id="e61" edge="1" parent="1" source="fi" style="edgeStyle=orthogonalEdgeStyle;html=1;" target="ixs">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="e62" value="xT[1,321,324]" style="edgeStyle=orthogonalEdgeStyle;html=1;fontSize=9;" edge="1" parent="1" source="ixs" target="dpm_s">
+        <mxCell id="MmXVoZgHaEW4HOVnoSEA-2" connectable="0" parent="e61" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=12;" value="&lt;span style=&quot;text-wrap-mode: wrap; background-color: rgb(236, 236, 236);&quot;&gt;_inference_x_start&lt;/span&gt;" vertex="1">
+          <mxGeometry relative="1" x="-0.0476" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e62" edge="1" parent="1" source="ixs" style="edgeStyle=orthogonalEdgeStyle;html=1;fontSize=9;" target="dpm_s" value="xT[1,321,324]">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="e63" value="x0[1,321,324]" style="edgeStyle=orthogonalEdgeStyle;html=1;fontSize=9;" edge="1" parent="1" source="dpm_s" target="ixs">
+        <mxCell id="e63" edge="1" parent="1" source="dpm_s" style="edgeStyle=orthogonalEdgeStyle;html=1;fontSize=9;" target="ixs" value="x0[1,321,324]">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <!-- 分支 B: flow_matching (ode) -->
-        <mxCell id="ifm" value="◄输入← (self.dit, xT[1,321,324], cross_c[1,N,hidden], mask, steps)&#xa;►输出→ x0[1,321,80,4]&#xa;Decoder._inference_flow_matching:394&#xa;ODE 积分（t=0噪声→t=1数据）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff1b3;strokeColor=#9c8a1f;" vertex="1" parent="1">
-          <mxGeometry x="1100" y="420" width="460" height="120" as="geometry" />
+        <mxCell id="ode" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe9d6;strokeColor=#b56a30;" value="◄输入← (velocity_field_fn, x[1,321,324], steps)&#xa;►输出→ x[1,321,324] (积分后)&#xa;ode_solver: euler_integration:4 / heun:23 / rk4:59&#xa;每步调 DiT 算 velocity" vertex="1">
+          <mxGeometry height="100" width="460" x="630" y="810" as="geometry" />
         </mxCell>
-        <mxCell id="ode" value="◄输入← (velocity_field_fn, x[1,321,324], steps)&#xa;►输出→ x[1,321,324] (积分后)&#xa;ode_solver: euler_integration:4 / heun:23 / rk4:59&#xa;每步调 DiT 算 velocity" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe9d6;strokeColor=#b56a30;" vertex="1" parent="1">
-          <mxGeometry x="1100" y="640" width="460" height="100" as="geometry" />
-        </mxCell>
-        <mxCell id="e65" style="edgeStyle=orthogonalEdgeStyle;html=1;" edge="1" parent="1" source="fi" target="ifm">
+        <mxCell id="e65" edge="1" parent="1" source="fi" style="edgeStyle=orthogonalEdgeStyle;html=1;" target="ifm">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="e66" style="edgeStyle=orthogonalEdgeStyle;html=1;" edge="1" parent="1" source="ifm" target="ode">
+        <mxCell id="MmXVoZgHaEW4HOVnoSEA-4" connectable="0" parent="e65" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=12;" value="&lt;span style=&quot;text-wrap-mode: wrap; background-color: rgb(236, 236, 236);&quot;&gt;_inference_flow_matching&lt;/span&gt;" vertex="1">
+          <mxGeometry relative="1" x="-0.43" y="5" as="geometry">
+            <mxPoint x="-1" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e66" edge="1" parent="1" source="ifm" style="edgeStyle=orthogonalEdgeStyle;html=1;" target="ode">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="e67" value="x0[1,321,324]" style="edgeStyle=orthogonalEdgeStyle;html=1;fontSize=9;" edge="1" parent="1" source="ode" target="ifm">
+        <mxCell id="e67" edge="1" parent="1" source="ode" style="edgeStyle=orthogonalEdgeStyle;html=1;fontSize=9;" target="ifm" value="x0[1,321,324]">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <!-- 还原 -->
-        <mxCell id="inv" value="◄输入← x0[1,321,80,4](归一化) + current_states_world[1,321,2](origin)&#xa;►输出→ prediction[1,321,80,4](绝对位置)&#xa;StateNormalizer.inverse (normalizer.py:23)&#xa;velocity 模式: velocity_to_waypoints:41 (cumsum+origin 重积分)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d6f5d6;strokeColor=#4a9a4a;" vertex="1" parent="1">
-          <mxGeometry x="500" y="800" width="500" height="100" as="geometry" />
+        <mxCell id="inv" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d6f5d6;strokeColor=#4a9a4a;" value="◄输入← x0[1,321,80,4](归一化) + current_states_world[1,321,2](origin)&#xa;►输出→ prediction[1,321,80,4](绝对位置)&#xa;StateNormalizer.inverse (normalizer.py:23)&#xa;velocity 模式: velocity_to_waypoints:41 (cumsum+origin 重积分)" vertex="1">
+          <mxGeometry height="100" width="500" x="340" y="620" as="geometry" />
         </mxCell>
-        <mxCell id="e70" value="x0[1,321,80,4]" style="edgeStyle=orthogonalEdgeStyle;html=1;fontSize=9;" edge="1" parent="1" source="ixs" target="inv">
+        <mxCell id="e70" edge="1" parent="1" source="ixs" style="edgeStyle=orthogonalEdgeStyle;html=1;fontSize=9;" target="inv" value="x0[1,321,80,4]">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="e71" value="x0[1,321,80,4]" style="edgeStyle=orthogonalEdgeStyle;html=1;fontSize=9;" edge="1" parent="1" source="ifm" target="inv">
+        <mxCell id="e71" edge="1" parent="1" source="ifm" style="edgeStyle=orthogonalEdgeStyle;html=1;fontSize=9;" target="inv" value="x0[1,321,80,4]">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="e72" value="prediction[1,321,80,4]" style="edgeStyle=orthogonalEdgeStyle;html=1;fontSize=9;" edge="1" parent="1" source="inv" target="vm">
+        <mxCell id="e72" edge="1" parent="1" source="ifm" style="edgeStyle=orthogonalEdgeStyle;html=1;fontSize=9;" target="vm" value="prediction[1,321,80,4]">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="lg2" value="tier4 特性: 321 agents(1+320), DiT 无 RouteEncoder, per-token t_embedder, DPM_Solver.sample:442 接受 prefix_mask&#xa;guidance/ 模块: collision, lane_keeping, road_border, route_following, speed_guidance 等（classifier guidance 用）" style="text;html=1;align=left;fontSize=11;" vertex="1" parent="1">
-          <mxGeometry x="40" y="1180" width="800" height="50" as="geometry" />
+        <mxCell id="lg2" parent="1" style="text;html=1;align=left;fontSize=11;" value="tier4 特性: 321 agents(1+320), DiT 无 RouteEncoder, per-token t_embedder, DPM_Solver.sample:442 接受 prefix_mask&#xa;guidance/ 模块: collision, lane_keeping, road_border, route_following, speed_guidance 等（classifier guidance 用）" vertex="1">
+          <mxGeometry height="50" width="800" x="40" y="1180" as="geometry" />
+        </mxCell>
+        <mxCell id="MmXVoZgHaEW4HOVnoSEA-3" edge="1" parent="1" source="inv" style="edgeStyle=orthogonalEdgeStyle;html=1;fontSize=9;" target="ifm" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="740" y="850" as="sourcePoint" />
+            <mxPoint x="750" y="190" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="ifm" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff1b3;strokeColor=#9c8a1f;" value="◄输入← (self.dit, xT[1,321,324], cross_c[1,N,hidden], mask, steps)&#xa;►输出→ x0[1,321,80,4]&#xa;Decoder._inference_flow_matching:394&#xa;ODE 积分（t=0噪声→t=1数据）" vertex="1">
+          <mxGeometry height="120" width="460" x="630" y="430" as="geometry" />
         </mxCell>
       </root>
     </mxGraphModel>
