@@ -1,0 +1,517 @@
+<mxfile host="app.diagrams.net" agent="claude" pages="4">
+  <diagram name="训练" id="hdp_train">
+    <mxGraphModel dx="1318" dy="500" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1700" pageHeight="1700" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="t1" parent="1" style="text;html=1;align=center;fontSize=15;fontStyle=1;" value="HDP-nuplan 训练数据流（函数级，ego-only [B,80,4] 速度；每框 ◄输入具体/►输出具体 + shape）" vertex="1">
+          <mxGeometry height="30" width="1300" x="200" y="10" as="geometry" />
+        </mxCell>
+        <mxCell id="bg_data" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d6f5d6;strokeColor=#6ab36a;verticalAlign=top;fontStyle=1;fontSize=12;" value="数据 + 训练入口" vertex="1">
+          <mxGeometry height="320" width="1640" x="30" y="60" as="geometry" />
+        </mxCell>
+        <mxCell id="npz" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dbeeff;strokeColor=#5a86b8;" value="◄输入← nuPlan scenario（data_process 预处理，与 DP 同）&#xa;►输出→ .npz + path_list.json&#xa;.npz keys: ego_current[10] ego_future[80,3]&#xa;  neighbor_past[32,21,11] neighbor_future[32,80,3]&#xa;  lanes[70,20,12] route_lanes[25,20,12] static[5,10]" vertex="1">
+          <mxGeometry height="160" width="360" x="50" y="100" as="geometry" />
+        </mxCell>
+        <mxCell id="ds" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d6f5d6;strokeColor=#4a9a4a;" value="◄输入← .npz(path_list.json) + idx&#xa;►输出→ batch tuple: ego_current[10] ego_future[80,3]&#xa;  neighbor_past[32,21,11] neighbor_future[10,80,3]&#xa;  lanes[70,20,12] route_lanes[25,20,12] static[5,10]&#xa;DiffusionPlannerData.__getitem__:17&#xa;⚠predicted_neighbor_num=10（仅 dataset 兼容，HDP 不预测邻居）" vertex="1">
+          <mxGeometry height="160" width="360" x="450" y="100" as="geometry" />
+        </mxCell>
+        <mxCell id="tp" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d6f5d6;strokeColor=#4a9a4a;" value="◄输入← args(CLI) + path_list.json&#xa;►输出→ train_epoch 调用 + ckpt(.pth) + args.json&#xa;train_predictor.model_training:109&#xa;ddp + DataLoader + Diffusion_Planner→DDP + ModelEma(0.999) + AdamW(5e-4) + CosineWarmup&#xa;⚠ args: diffusion_model_type=x_start, diffusion_supervision_type=x_start, planning_hybrid_loss=0.01" vertex="1">
+          <mxGeometry height="120" width="400" x="850" y="100" as="geometry" />
+        </mxCell>
+        <mxCell id="te" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d6f5d6;strokeColor=#4a9a4a;" value="◄输入← batch tuple + model/ema/opt/args&#xa;►输出→ diffusion_loss_func 调用&#xa;train_epoch:11&#xa;inputs.to(device) → aug(if) → heading→cos/sin(ego_future[B,80,3]→[B,80,4])&#xa;→ ObservationNormalizer → diffusion_loss_func(model, inputs, sde, futures, state_normalizer, loss, model_type, supervision_type)" vertex="1">
+          <mxGeometry height="120" width="360" x="1300" y="100" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" edge="1" parent="1" source="npz" style="edgeStyle=orthogonalEdgeStyle;html=1;fontSize=9;" target="ds" value=".npz">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e2" edge="1" parent="1" source="ds" style="edgeStyle=orthogonalEdgeStyle;html=1;" target="tp">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3" edge="1" parent="1" source="tp" style="edgeStyle=orthogonalEdgeStyle;html=1;" target="te">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="bg_loss" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ece1f7;strokeColor=#9b7cc7;verticalAlign=top;fontStyle=1;fontSize=12;" value="loss.py  (diffusion_loss_func:9 — HDP 核心：速度 GT + 4目标 transform + 混合损失)" vertex="1">
+          <mxGeometry height="350" width="1640" x="30" y="410" as="geometry" />
+        </mxCell>
+        <mxCell id="loss" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3eafa;strokeColor=#7a4fb0;" value="◄输入← (model, inputs, sde, futures=(ego_future[B,80,4],), state_normalizer, loss, model_type, supervision_type)&#xa;►输出→ loss dict{ego_planning_loss, ego_planning_hybrid_loss}(scalars)&#xa;diffusion_loss_func:9 (loss.py)&#xa;① GT 构造: ego_future_vel = diff(zero_pad ⊕ ego_future):25 → [B,80,4](Δx,Δy,cos,sin)&#xa;   all_gt = norm(ego_future_vel):30 → [B,80,4]（⚠无 anchor 帧，ego-only！）&#xa;② 加噪: t=rand[B], z=randn[B,80,4] → sde.marginal_prob(all_gt,t):35 → mean,std&#xa;   xT = mean + std*z → [B,80,4]&#xa;③ 4目标: v = sde.transform(&#39;noise-&gt;v&#39;,z,t,xT):40（构造 v 目标）&#xa;④ model(merged_inputs) → score[B,80,4]&#xa;⑤ score = sde.transform(f&#39;{model_type}-&gt;{supervision_type}&#39;, score, t, xT):58（转监督空间）&#xa;⑥ dpm_loss = sum((score - all_gt)**2):63（x_start 分支）→ ego_planning_loss:68" vertex="1">
+          <mxGeometry height="280" width="500" x="60" y="460" as="geometry" />
+        </mxCell>
+        <mxCell id="hl" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3eafa;strokeColor=#7a4fb0;" value="◄输入← score[B,80,4] + t + xT + sde + ego_future[B,80,4] + state_normalizer&#xa;►输出→ ego_planning_hybrid_loss (scalar)&#xa;混合损失（loss.py:74-77）:&#xa;  pred_v = sde.transform(f&#39;{model_type}-&gt;x_start&#39;, score, t, xT):74 → [B,80,4](速度)&#xa;  pred_v = norm.inverse(pred_v)（反归一化）&#xa;  pred_x = detached_integral(pred_v[...,:2], W=10):76 → [B,80,2](位置，分离积分)&#xa;  loss = sum((pred_x - ego_future[...,:2])**2):77 → scalar&#xa;⚠ traj_kinematics.py:3 detached_integral（HDP 新文件）" vertex="1">
+          <mxGeometry height="180" width="400" x="610" y="440" as="geometry" />
+        </mxCell>
+        <mxCell id="total" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3eafa;strokeColor=#7a4fb0;" value="◄输入← ego_planning_loss + ego_planning_hybrid_loss&#xa;►输出→ loss[&#39;loss&#39;] (scalar)&#xa;总损失（train_epoch:105）:&#xa;  loss = ego_planning_loss + 0.01 * ego_planning_hybrid_loss&#xa;⚠ ω=planning_hybrid_loss=0.01&#xa;⚠ 无 neighbor_prediction_loss（HDP 删了）" vertex="1">
+          <mxGeometry height="100" width="360" x="1130" y="450" as="geometry" />
+        </mxCell>
+        <mxCell id="e10" edge="1" parent="1" source="te" style="edgeStyle=orthogonalEdgeStyle;html=1;" target="loss">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1480" y="390" />
+              <mxPoint x="300" y="390" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e11" edge="1" parent="1" source="loss" style="edgeStyle=orthogonalEdgeStyle;html=1;" target="hl">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="u-RmWfCvlc-bzN87jqSb-1" connectable="0" parent="e11" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=12;" value="loss" vertex="1">
+          <mxGeometry relative="1" x="-0.1667" y="2" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e12" edge="1" parent="1" source="loss" style="edgeStyle=orthogonalEdgeStyle;html=1;fontSize=9;" target="total" value="ego_planning_loss">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="310" y="410" />
+              <mxPoint x="1240" y="410" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e13" edge="1" parent="1" source="hl" style="edgeStyle=orthogonalEdgeStyle;html=1;fontSize=9;" target="total" value="ego_planning_hybrid_loss">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="sde" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe9d6;strokeColor=#b56a30;" value="◄输入← all_gt[B,80,4] + t[B]&#xa;►输出→ (mean[B,80,4], std[B,1,1,1])&#xa;sde.VPSDE_linear.marginal_prob:99&#xa;α·x+σ·ε (βmin0.1/βmax20)&#xa;★ sde.transform:129（4目标 ε-枢纽转换）&#xa;  x_start↔noise↔v↔score 互转" vertex="1">
+          <mxGeometry height="110" width="360" x="1060" y="640" as="geometry" />
+        </mxCell>
+        <mxCell id="e20" edge="1" parent="1" source="loss" style="edgeStyle=orthogonalEdgeStyle;html=1;dashed=1;" target="sde">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="580" y="630" />
+              <mxPoint x="580" y="730" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e21" edge="1" parent="1" source="sde" style="edgeStyle=orthogonalEdgeStyle;html=1;dashed=1;" target="loss">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="600" y="695" />
+              <mxPoint x="600" y="620" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e22" edge="1" parent="1" source="sde" style="edgeStyle=orthogonalEdgeStyle;html=1;dashed=1;" target="hl">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="bg_modl" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff7cc;strokeColor=#c9b347;verticalAlign=top;fontStyle=1;fontSize=12;" value="model  (Diffusion_Planner.forward:20 → Encoder[与DP同] + Decoder/DiT[HDP重构])" vertex="1">
+          <mxGeometry height="370" width="1640" x="30" y="790" as="geometry" />
+        </mxCell>
+        <mxCell id="dp2" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff1b3;strokeColor=#9c8a1f;" value="◄输入← merged_inputs = {**inputs, sampled_trajectories=xT[B,80,4], diffusion_time=t[B]}&#xa;►输出→ (encoder_outputs, decoder_outputs{&#39;score&#39;:[B,80,4]})&#xa;Diffusion_Planner.forward:20 (diffusion_planner.py:9)&#xa;encoder(inputs) → decoder(encoding, inputs)" vertex="1">
+          <mxGeometry height="90" width="440" x="850" y="830" as="geometry" />
+        </mxCell>
+        <mxCell id="enc" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff1b3;strokeColor=#9c8a1f;" value="◄输入← inputs{neighbor_past[B,32,21,11], static[B,5,10], lanes[B,70,20,12], route_lanes[B,25,20,12], ...}&#xa;►输出→ encoding[B,107,192] (32+5+70=107 token)&#xa;Encoder.forward (encoder.py:32) ← 与 DP 完全相同&#xa;AgentFusionEncoder/StaticFusionEncoder/LaneFusionEncoder&#xa;→ cat 107 token → pos_emb → FusionEncoder(3×SelfAttentionBlock)" vertex="1">
+          <mxGeometry height="160" width="420" x="50" y="950" as="geometry" />
+        </mxCell>
+        <mxCell id="dec" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff1b3;strokeColor=#9c8a1f;" value="◄输入← encoding[B,107,192] + inputs{sampled_trajectories=xT[B,80,4], diffusion_time=t[B], ego_current_state[B,10]}&#xa;►输出→ {&#39;score&#39;:[B,80,4]}（⚠ ego-only，无 turn_indicator，无邻居预测）&#xa;Decoder.forward:41 (decoder.py:14)&#xa;ego_current = inputs[&#39;ego_current_state&#39;][:,:4] → [B,1,4]&#xa;ego_v = ego_current[:,2:4] → [B,2] (vx,vy) ← HDP 新增：注入当前速度&#xa;sampled_trajectories = inputs[&#39;sampled_trajectories&#39;] → [B,80,4]&#xa;→ self.dit(sampled_trajectories, t, encoding, route_lanes, ego_v) → score[B,80,4]" vertex="1">
+          <mxGeometry height="200" width="440" x="550" y="950" as="geometry" />
+        </mxCell>
+        <mxCell id="dit" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff1b3;strokeColor=#9c8a1f;" value="◄输入← x[B,80,4] + t[B] + cross_c[B,107,192] + route_lanes[B,25,20,12] + ego_current_states[B,2](vx,vy)&#xa;►输出→ score/x_start [B,80,4]&#xa;DiT.forward:185 (decoder.py:165)&#xa;x=preproj(4→512→192) [B,80,192]&#xa;x+=agent_embedding.weight(Embedding(80,192)) [B,80,192] ← per-timestep（非 ego/neighbor 角色）&#xa;x+=ego_state_proj(Linear(2→192))(ego_v) [B,1,192] ← HDP 新增：注入 vx,vy&#xa;y=RouteEncoder(route_lanes)→[B,192] + t_embedder(t)→[B,192]&#xa;3×DiTBlock:66(x, cond=cross_c, y) → FinalLayer:96 → [B,80,4]&#xa;★ HDP 特性: 80 timestep token(非11 agent); 9*dim adaLN(非6); 全门控(self+cross+MLP); 无 attn_mask" vertex="1">
+          <mxGeometry height="200" width="520" x="1130" y="930" as="geometry" />
+        </mxCell>
+        <mxCell id="e30" edge="1" parent="1" source="loss" style="edgeStyle=orthogonalEdgeStyle;html=1;" target="dp2">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="310" y="770" />
+              <mxPoint x="1070" y="770" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e31" edge="1" parent="1" source="dp2" style="edgeStyle=orthogonalEdgeStyle;html=1;" target="enc">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e32" edge="1" parent="1" source="dp2" style="edgeStyle=orthogonalEdgeStyle;html=1;" target="dec">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e33" edge="1" parent="1" source="enc" style="edgeStyle=orthogonalEdgeStyle;html=1;fontSize=9;" target="dec" value="encoding [B,107,192] (cross_c)">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e34" edge="1" parent="1" source="dec" style="edgeStyle=orthogonalEdgeStyle;html=1;fontSize=9;" target="dit" value="x[B,80,4]+t+cross_c+route_lanes+ego_v">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e35" edge="1" parent="1" source="dit" style="edgeStyle=orthogonalEdgeStyle;html=1;fontSize=9;" target="dec" value="score [B,80,4]">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e36" edge="1" parent="1" source="dec" style="edgeStyle=orthogonalEdgeStyle;html=1;fontSize=9;" target="loss" value="score [B,80,4]">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="back" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666;" value="backward" vertex="1">
+          <mxGeometry height="50" width="120" x="1500" y="575" as="geometry" />
+        </mxCell>
+        <mxCell id="e40" edge="1" parent="1" source="total" style="edgeStyle=orthogonalEdgeStyle;html=1;fontSize=9;" target="back" value="loss dict">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="lg" parent="1" style="text;html=1;align=left;fontSize=11;" value="HDP-nuplan 特性（vs DP）:&#xa;① ego-only [B,80,4]（无邻居预测，无 anchor 帧）&#xa;② 速度表征: ego_future_vel=diff(zero_pad⊕ego_future) → [B,80,4](Δx,Δy,cos,sin)&#xa;③ 4目标 SDE.transform:129（x_start/noise/v/score ε-枢纽互转）&#xa;④ 混合损失: ego_planning + 0.01*hybrid(detached_integral:3, W=10)&#xa;⑤ DiT 80 timestep token×4dim(非11 agent×324); Embedding(80) per-timestep; ego_state_proj(2→192) 注入 vx,vy; 9*dim adaLN 全门控; 无 attn_mask&#xa;⑥ RouteEncoder 保留（encoder→decoder→DiT y）&#xa;⑦ 推理: 无 anchor/guidance, 噪声0.1, cumsum 重积分&#xa;⑧ StateNormalizer ego-only" vertex="1">
+          <mxGeometry height="160" width="700" x="50" y="1180" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram name="推理" id="hdp_infer">
+    <mxGraphModel dx="1800" dy="1400" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1700" pageHeight="1300" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="t2" value="HDP-nuplan 推理数据流（HyperDiffusionPlanner → 无 anchor 无引导 → DPM-Solver 10步 → cumsum 重积分 → 轨迹）" style="text;html=1;align=center;fontSize=16;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="200" y="10" width="1300" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="pl" value="◄输入← nuPlan PlannerInput（仿真引擎每步调）&#xa;►输出→ InterpolatedTrajectory[80,3]（8s 轨迹）&#xa;HyperDiffusionPlanner.compute_planner_trajectory:117 (planner.py:28)&#xa;内部串: observation_adapter → normalize → model → decoder eval → dpm_sampler → inverse → cumsum → outputs_to_trajectory" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3e6f3;strokeColor=#8a3c8a;" vertex="1" parent="1">
+          <mxGeometry x="500" y="70" width="500" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="obs" value="◄输入← PlannerInput.history_buffer + traffic_light + map_api + route_ids&#xa;►输出→ inputs dict(tensor, ego-centric)&#xa;data_processor.observation_adapter:38（复用 DP 预处理：agent_past_process + route_correction + map_process + convert_to_model_inputs）&#xa;⚠ ego_current=[0,0,1,0,...]，无 ego/邻居未来" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dbeeff;strokeColor=#5a86b8;" vertex="1" parent="1">
+          <mxGeometry x="100" y="250" width="440" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="nm" value="◄输入← inputs dict(tensor)&#xa;►输出→ 归一化 inputs(padding 留0)&#xa;ObservationNormalizer.__call__:49" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e3f7e3;strokeColor=#4a9a4a;" vertex="1" parent="1">
+          <mxGeometry x="650" y="270" width="240" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="e60" style="edgeStyle=orthogonalEdgeStyle;html=1;" edge="1" parent="1" source="pl" target="obs">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e61" style="edgeStyle=orthogonalEdgeStyle;html=1;" edge="1" parent="1" source="obs" target="nm">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="model" value="◄输入← inputs dict[归一化] (B=1)&#xa;►输出→ decoder_outputs{&#39;prediction&#39;:[1,80,4]}&#xa;Diffusion_Planner.forward:20&#xa;→ Encoder.forward(encoding[1,107,192]) + Decoder.forward:41(eval 分支)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff1b3;strokeColor=#9c8a1f;" vertex="1" parent="1">
+          <mxGeometry x="950" y="250" width="400" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="e62" style="edgeStyle=orthogonalEdgeStyle;html=1;" edge="1" parent="1" source="nm" target="model">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="dec_eval" value="◄输入← encoding[1,107,192] + inputs{ego_current_state[1,10], route_lanes[1,25,20,12], ...}&#xa;►输出→ {&#39;prediction&#39;:[1,80,4]}&#xa;Decoder.forward:41 (eval 分支, decoder.py:41)&#xa;xT = randn(1, 80, 4) * 0.1 :95  ← ⚠噪声0.1(非0.5), 无 anchor 帧拼接&#xa;x0 = dpm_sampler(self.dit, xT, ...) :97  ← ⚠无 correcting_xt_fn(无 anchor), 无 classifier_fn(无引导)&#xa;x0 = state_normalizer.inverse(x0) :108 → [1,80,4](反归一化速度)&#xa;x0 = cat([cumsum(x0[...,:2],dim=-2), x0[...,2:]], -1) :110 → [1,80,4](速度→位置)&#xa;return {&#39;prediction&#39;: x0} :114" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff1b3;strokeColor=#9c8a1f;" vertex="1" parent="1">
+          <mxGeometry x="500" y="430" width="520" height="200" as="geometry" />
+        </mxCell>
+        <mxCell id="e63" style="edgeStyle=orthogonalEdgeStyle;html=1;" edge="1" parent="1" source="model" target="dec_eval">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="dpm" value="◄输入← (model=DiT, x_T[1,80,4], other_model_params={cross_c[1,107,192], route_lanes, ego_current_states}, steps=10)&#xa;►输出→ x0[1,80,4] (τ₀ 干净速度)&#xa;dpm_sampler:6 (sampling.py)&#xa;NoiseScheduleVP(linear) + model_wrapper + DPM_Solver.sample&#xa;⚠ dpm_solver_params={}(空！无 correcting_xt_fn)&#xa;⚠ model_wrapper_params={}(空！无 classifier_fn, guidance_type=uncond)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe9d6;strokeColor=#b56a30;" vertex="1" parent="1">
+          <mxGeometry x="1100" y="430" width="440" height="160" as="geometry" />
+        </mxCell>
+        <mxCell id="e64" value="xT[1,80,4]" style="edgeStyle=orthogonalEdgeStyle;html=1;fontSize=9;" edge="1" parent="1" source="dec_eval" target="dpm">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e65" value="x0[1,80,4]" style="edgeStyle=orthogonalEdgeStyle;html=1;fontSize=9;" edge="1" parent="1" source="dpm" target="dec_eval">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="traj" value="◄输入← outputs[&#39;prediction&#39;][1,80,4]&#xa;►输出→ InterpolatedTrajectory[80,3]&#xa;outputs_to_trajectory:107 (planner.py)&#xa;predictions = outputs[&#39;prediction&#39;][0,0] → [80,4]&#xa;heading = arctan2(pred[:,3], pred[:,2]) → [80,1]&#xa;predictions = cat([pred[:,:2], heading]) → [80,3] = (x,y,heading)&#xa;states = transform_predictions_to_states(predictions, ego_history, horizon=8s, step=0.1s)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3e6f3;strokeColor=#8a3c8a;" vertex="1" parent="1">
+          <mxGeometry x="500" y="700" width="520" height="160" as="geometry" />
+        </mxCell>
+        <mxCell id="e66" value="prediction[1,80,4]" style="edgeStyle=orthogonalEdgeStyle;html=1;fontSize=9;" edge="1" parent="1" source="dec_eval" target="traj">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e67" value="trajectory[80,3]" style="edgeStyle=orthogonalEdgeStyle;html=1;fontSize=9;" edge="1" parent="1" source="traj" target="pl">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="lg2" value="HDP 推理特性（vs DP）:&#xa;① xT = randn(1,80,4)*0.1（非 randn*0.5 + anchor 拼接）&#xa;② dpm_sampler 无 correcting_xt_fn（无 anchor 约束）、无 classifier_fn（无引导）&#xa;③ cumsum(x0[...,:2]) 重积分速度→位置（DP 是直接输出 waypoint）&#xa;④ ego-only output[1,80,4]（非[1,11,80,4] ego+邻居）" style="text;html=1;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="40" y="900" width="700" height="80" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="qj1FIoBfiShdugwz9HSn" name="HDP DIT">
+    <mxGraphModel dx="1155" dy="635" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="0" pageScale="1" pageWidth="2339" pageHeight="3300" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="rVSJWesITk-Xj1eEuNrG-1" parent="1" style="text;html=1;align=center;fontSize=14;fontStyle=1;" value="HDP DiT.forward (decoder.py:185) — 80 timestep token × 4 维，9*dim adaLN，3 子层全门控，无 attn_mask，新增 ego_state_proj" vertex="1">
+          <mxGeometry height="30" width="1400" x="87" y="121" as="geometry" />
+        </mxCell>
+        <mxCell id="rVSJWesITk-Xj1eEuNrG-2" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff1b3;strokeColor=#9c8a1f;" value="◄ x（加噪速度轨迹）&#xa;[B, 80, 4]&#xa;(80 时间步 × 4维 Δx,Δy,cos,sin)" vertex="1">
+          <mxGeometry height="80" width="240" x="87" y="171" as="geometry" />
+        </mxCell>
+        <mxCell id="rVSJWesITk-Xj1eEuNrG-3" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe9d6;strokeColor=#b56a30;" value="◄ t（扩散时间）&#xa;[B] scalar" vertex="1">
+          <mxGeometry height="80" width="180" x="377" y="171" as="geometry" />
+        </mxCell>
+        <mxCell id="rVSJWesITk-Xj1eEuNrG-4" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dbeeff;strokeColor=#5a86b8;" value="◄ cross_c（场景上下文）&#xa;[B, 107, 192]&#xa;(encoder 输出，与 DP 同)" vertex="1">
+          <mxGeometry height="80" width="240" x="617" y="171" as="geometry" />
+        </mxCell>
+        <mxCell id="rVSJWesITk-Xj1eEuNrG-5" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dbeeff;strokeColor=#5a86b8;" value="◄ route_lanes（路由车道）&#xa;[B, 25, 20, 12]" vertex="1">
+          <mxGeometry height="80" width="240" x="917" y="171" as="geometry" />
+        </mxCell>
+        <mxCell id="rVSJWesITk-Xj1eEuNrG-6" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3eafa;strokeColor=#7a4fb0;" value="◄ ego_current_states&#xa;[B, 2] (vx, vy)&#xa;★ HDP 新增" vertex="1">
+          <mxGeometry height="80" width="240" x="1217" y="171" as="geometry" />
+        </mxCell>
+        <mxCell id="rVSJWesITk-Xj1eEuNrG-7" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff1b3;strokeColor=#9c8a1f;" value="preproj&#xa;Mlp(4→512→192)&#xa;:173&#xa;★ HDP: 4→192 (非 324→192)" vertex="1">
+          <mxGeometry height="80" width="200" x="107" y="291" as="geometry" />
+        </mxCell>
+        <mxCell id="rVSJWesITk-Xj1eEuNrG-8" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe9d6;strokeColor=#b56a30;" value="t_embedder&#xa;正弦(10000)→Linear(256→192)&#xa;→SiLU→Linear(192→192)&#xa;:175  dit.py:26" vertex="1">
+          <mxGeometry height="80" width="220" x="377" y="291" as="geometry" />
+        </mxCell>
+        <mxCell id="rVSJWesITk-Xj1eEuNrG-9" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dbeeff;strokeColor=#5a86b8;" value="RouteEncoder&#xa;Mlp(4→64)+Mixer+mean&#xa;+emb(64→192)→[B,192]&#xa;decoder.py:119/fwd:133" vertex="1">
+          <mxGeometry height="80" width="240" x="917" y="291" as="geometry" />
+        </mxCell>
+        <mxCell id="rVSJWesITk-Xj1eEuNrG-10" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff1b3;strokeColor=#9c8a1f;" value="agent_embedding&#xa;nn.Embedding(80, 192)&#xa;:172&#xa;★ HDP: 80 行 per-timestep 位置&#xa;(非 2 行 ego/neighbor 角色)" vertex="1">
+          <mxGeometry height="90" width="240" x="107" y="401" as="geometry" />
+        </mxCell>
+        <mxCell id="rVSJWesITk-Xj1eEuNrG-11" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3eafa;strokeColor=#7a4fb0;" value="ego_state_proj&#xa;nn.Linear(2, 192)&#xa;:174&#xa;★ HDP 新增：注入当前 vx,vy" vertex="1">
+          <mxGeometry height="80" width="240" x="1217" y="291" as="geometry" />
+        </mxCell>
+        <mxCell id="rVSJWesITk-Xj1eEuNrG-12" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff1b3;strokeColor=#9c8a1f;fontStyle=1;" value="x = preproj(x) + agent_embedding + ego_state_embedding&#xa;► [B, 80, 192]&#xa;:194-199  (★ HDP 多加 ego_state_embedding)" vertex="1">
+          <mxGeometry height="60" width="400" x="87" y="531" as="geometry" />
+        </mxCell>
+        <mxCell id="rVSJWesITk-Xj1eEuNrG-13" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe9d6;strokeColor=#b56a30;fontStyle=1;" value="y = route_encoding + t_embedder(t)&#xa;► [B, 192]  (adaLN 条件)" vertex="1">
+          <mxGeometry height="60" width="320" x="397" y="431" as="geometry" />
+        </mxCell>
+        <mxCell id="rVSJWesITk-Xj1eEuNrG-14" edge="1" parent="1" source="rVSJWesITk-Xj1eEuNrG-2" style="edgeStyle=orthogonalEdgeStyle;html=1;" target="rVSJWesITk-Xj1eEuNrG-7">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="rVSJWesITk-Xj1eEuNrG-15" edge="1" parent="1" source="rVSJWesITk-Xj1eEuNrG-3" style="edgeStyle=orthogonalEdgeStyle;html=1;" target="rVSJWesITk-Xj1eEuNrG-8">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="rVSJWesITk-Xj1eEuNrG-16" edge="1" parent="1" source="rVSJWesITk-Xj1eEuNrG-5" style="edgeStyle=orthogonalEdgeStyle;html=1;" target="rVSJWesITk-Xj1eEuNrG-9">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="rVSJWesITk-Xj1eEuNrG-17" edge="1" parent="1" source="rVSJWesITk-Xj1eEuNrG-6" style="edgeStyle=orthogonalEdgeStyle;html=1;" target="rVSJWesITk-Xj1eEuNrG-11">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="rVSJWesITk-Xj1eEuNrG-18" edge="1" parent="1" source="rVSJWesITk-Xj1eEuNrG-7" style="edgeStyle=orthogonalEdgeStyle;html=1;" target="rVSJWesITk-Xj1eEuNrG-12">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="367" y="331" />
+              <mxPoint x="367" y="441" />
+              <mxPoint x="387" y="441" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="rVSJWesITk-Xj1eEuNrG-19" edge="1" parent="1" source="rVSJWesITk-Xj1eEuNrG-10" style="edgeStyle=orthogonalEdgeStyle;html=1;" target="rVSJWesITk-Xj1eEuNrG-12">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="rVSJWesITk-Xj1eEuNrG-20" edge="1" parent="1" source="rVSJWesITk-Xj1eEuNrG-11" style="edgeStyle=orthogonalEdgeStyle;html=1;" target="rVSJWesITk-Xj1eEuNrG-12">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1347" y="561" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="rVSJWesITk-Xj1eEuNrG-21" connectable="0" parent="rVSJWesITk-Xj1eEuNrG-20" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=12;" value="ego_state_embedding" vertex="1">
+          <mxGeometry relative="1" x="0.0076" as="geometry">
+            <mxPoint x="-1" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="rVSJWesITk-Xj1eEuNrG-22" edge="1" parent="1" source="rVSJWesITk-Xj1eEuNrG-8" style="edgeStyle=orthogonalEdgeStyle;html=1;" target="rVSJWesITk-Xj1eEuNrG-13">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="rVSJWesITk-Xj1eEuNrG-23" edge="1" parent="1" source="rVSJWesITk-Xj1eEuNrG-9" style="edgeStyle=orthogonalEdgeStyle;html=1;" target="rVSJWesITk-Xj1eEuNrG-13">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="647" y="331" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="rVSJWesITk-Xj1eEuNrG-24" connectable="0" parent="rVSJWesITk-Xj1eEuNrG-23" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=12;" value="route_encoding" vertex="1">
+          <mxGeometry relative="1" x="-0.3622" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="rVSJWesITk-Xj1eEuNrG-25" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff7cc;strokeColor=#c9b347;verticalAlign=top;fontStyle=1;fontSize=12;" value="DiTBlock × 3  (dit.py:66, forward:86)  —  adaLN 9*dim 全门控（HDP 改：6→9, 4 子层→3 子层全 gate）" vertex="1">
+          <mxGeometry height="440" width="1440" x="67" y="631" as="geometry" />
+        </mxCell>
+        <mxCell id="rVSJWesITk-Xj1eEuNrG-26" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff1b3;strokeColor=#9c8a1f;" value="◄输入← y [B,192]&#xa;►输出→ 9 个调制向量&#xa;adaLN_modulation = SiLU → Linear(192→9*192=1728)  :80-82&#xa;chunk(9) → (shift_msa,scale_msa,gate_msa,  shift_mca,scale_mca,gate_mca,  shift_mlp,scale_mlp,gate_mlp)&#xa;★ HDP: 9*dim (非 6*dim); 3 子层全门控 (非 2+2覆写)" vertex="1">
+          <mxGeometry height="110" width="450" x="917" y="671" as="geometry" />
+        </mxCell>
+        <mxCell id="rVSJWesITk-Xj1eEuNrG-27" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff1b3;strokeColor=#9c8a1f;" value="◄输入← x[B,80,192] + (shift_msa,scale_msa,gate_msa)&#xa;►输出→ x = x + gate_msa · attn(modulate(LN(x)))  [B,80,192]&#xa;① self-attn  :90&#xa;Q=K=V=x&#39;  MultiheadAttention(192,6)&#xa;★ 80 TIMESTEP token 互看（时序一致性，非 agent 间）&#xa;✅ 带 gate 残差&#xa;★ HDP: 无 key_padding_mask（ego-only，无 padding 邻居）" vertex="1">
+          <mxGeometry height="130" width="450" x="77" y="811" as="geometry" />
+        </mxCell>
+        <mxCell id="rVSJWesITk-Xj1eEuNrG-28" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dbeeff;strokeColor=#5a86b8;" value="◄输入← x[B,80,192] + (shift_mca,scale_mca,gate_mca) + cross_c[B,107,192]&#xa;►输出→ x = x + gate_mca · cross_attn(modulate(LN(x)), cross_c)  [B,80,192]&#xa;② cross-attn  :91&#xa;Q=x&#39;  K=V=cross_c  MultiheadAttention(192,6)&#xa;★ 80 timestep token 去 query 107 场景 context&#xa;✅ 带 gate 残差（★ HDP 改：DP 无 gate 直接覆写 → HDP 加 gate 残差）" vertex="1">
+          <mxGeometry height="130" width="450" x="587" y="811" as="geometry" />
+        </mxCell>
+        <mxCell id="rVSJWesITk-Xj1eEuNrG-29" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff1b3;strokeColor=#9c8a1f;" value="◄输入← x[B,80,192] + (shift_mlp,scale_mlp,gate_mlp)&#xa;►输出→ x = x + gate_mlp · mlp(modulate(LN(x)))  [B,80,192]&#xa;③ MLP  :92&#xa;Mlp(192→768→192, GELU)&#xa;✅ 带 gate 残差&#xa;★ HDP: DP 的 mlp1+mlp2 合并为 1 个 MLP（全带 gate）" vertex="1">
+          <mxGeometry height="130" width="400" x="1087" y="811" as="geometry" />
+        </mxCell>
+        <mxCell id="rVSJWesITk-Xj1eEuNrG-30" edge="1" parent="1" source="rVSJWesITk-Xj1eEuNrG-4" style="edgeStyle=orthogonalEdgeStyle;html=1;fontSize=9;dashed=1;" target="rVSJWesITk-Xj1eEuNrG-28" value="cross_c [B,107,192]&#xa;直接作 K/V">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="rVSJWesITk-Xj1eEuNrG-31" edge="1" parent="1" source="rVSJWesITk-Xj1eEuNrG-13" style="edgeStyle=orthogonalEdgeStyle;html=1;fontSize=9;dashed=1;" target="rVSJWesITk-Xj1eEuNrG-26" value="y [B,192]">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="617" y="611" />
+              <mxPoint x="1142" y="611" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="rVSJWesITk-Xj1eEuNrG-32" edge="1" parent="1" source="rVSJWesITk-Xj1eEuNrG-12" style="edgeStyle=orthogonalEdgeStyle;html=1;fontSize=9;" target="rVSJWesITk-Xj1eEuNrG-27" value="x [B,80,192]">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="287" y="781" />
+              <mxPoint x="287" y="781" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="rVSJWesITk-Xj1eEuNrG-33" edge="1" parent="1" source="rVSJWesITk-Xj1eEuNrG-27" style="edgeStyle=orthogonalEdgeStyle;html=1;" target="rVSJWesITk-Xj1eEuNrG-28">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="rVSJWesITk-Xj1eEuNrG-34" edge="1" parent="1" source="rVSJWesITk-Xj1eEuNrG-28" style="edgeStyle=orthogonalEdgeStyle;html=1;" target="rVSJWesITk-Xj1eEuNrG-29">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="rVSJWesITk-Xj1eEuNrG-35" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff1b3;strokeColor=#9c8a1f;fontStyle=1;" value="◄输入← x[B,80,192] + y[B,192]&#xa;►输出→ [B,80,4]&#xa;FinalLayer  dit.py:96/fwd:116&#xa;adaLN(2向量: shift,scale) → modulate(LN(x))&#xa;proj: LN→Linear(192→768)→GELU→LN→Linear(768→4)&#xa;★ HDP: output=4 (非 324)" vertex="1">
+          <mxGeometry height="100" width="400" x="387" y="1111" as="geometry" />
+        </mxCell>
+        <mxCell id="rVSJWesITk-Xj1eEuNrG-36" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3eafa;strokeColor=#7a4fb0;fontStyle=1;" value="◄输入← [B,80,4]&#xa;►输出→ [B,80,4] score/x_start/noise/v&#xa;model_type 分支:&#xa;  score: x / (marginal_prob_std(t)+1e-6)  :210&#xa;  x_start/noise/v: x  :212&#xa;★ HDP: 支持 4 目标 (非 2)&#xa;→ 送回 Decoder → loss.py（sde.transform 转 supervision 空间 → MSE）" vertex="1">
+          <mxGeometry height="130" width="400" x="387" y="1251" as="geometry" />
+        </mxCell>
+        <mxCell id="rVSJWesITk-Xj1eEuNrG-37" edge="1" parent="1" source="rVSJWesITk-Xj1eEuNrG-29" style="edgeStyle=orthogonalEdgeStyle;html=1;" target="rVSJWesITk-Xj1eEuNrG-35">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1267" y="1161" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="rVSJWesITk-Xj1eEuNrG-38" edge="1" parent="1" source="rVSJWesITk-Xj1eEuNrG-35" style="edgeStyle=orthogonalEdgeStyle;html=1;" target="rVSJWesITk-Xj1eEuNrG-36">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="rVSJWesITk-Xj1eEuNrG-39" edge="1" parent="1" source="rVSJWesITk-Xj1eEuNrG-13" style="edgeStyle=orthogonalEdgeStyle;html=1;fontSize=9;dashed=1;" target="rVSJWesITk-Xj1eEuNrG-35" value="y">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="557" y="971" />
+              <mxPoint x="557" y="971" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="rVSJWesITk-Xj1eEuNrG-40" parent="1" style="text;html=1;align=left;fontSize=11;" value="★ HDP vs DP DiT 差异:&#xa;① token: 80 timestep×4dim (非 11 agent×324) → attention 在时间维(非 agent 维)&#xa;② agent_embedding: Embedding(80) per-timestep (非 Embedding(2) ego/neighbor 角色)&#xa;③ ★新增 ego_state_proj: Linear(2→192) 注入 vx,vy (DP 无)&#xa;④ adaLN: 9*dim 全门控 3 子层 (非 6*dim 2+2 覆写 4 子层)&#xa;⑤ 无 attn_mask (ego-only 无 padding 邻居; DP 有)&#xa;⑥ output: 4dim (非 324dim); 4 目标 (非 2)" vertex="1">
+          <mxGeometry height="120" width="600" x="87" y="1411" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="P9w00E1QnoT3LSeIeqZS" name="DP DIT">
+    <mxGraphModel dx="586" dy="762" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="0" pageScale="1" pageWidth="2339" pageHeight="3300" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="073jqp0mwhABV5Sj9pbP-41" parent="1" style="text;html=1;align=center;fontSize=14;fontStyle=1;" value="DP DiT.forward (decoder.py:224) — 11 agent token × 324 维，6*dim adaLN，4 子层（self+mlp1 带 gate / cross+mlp2 覆写）" vertex="1">
+          <mxGeometry height="30" width="1300" x="1125" y="329" as="geometry" />
+        </mxCell>
+        <mxCell id="073jqp0mwhABV5Sj9pbP-42" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff1b3;strokeColor=#9c8a1f;" value="◄ x（加噪轨迹）&#xa;[B, 11, 324]&#xa;(11 agent × 81步×4 展平)" vertex="1">
+          <mxGeometry height="80" width="240" x="1125" y="379" as="geometry" />
+        </mxCell>
+        <mxCell id="073jqp0mwhABV5Sj9pbP-43" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe9d6;strokeColor=#b56a30;" value="◄ t（扩散时间）&#xa;[B] scalar" vertex="1">
+          <mxGeometry height="80" width="200" x="1435" y="379" as="geometry" />
+        </mxCell>
+        <mxCell id="073jqp0mwhABV5Sj9pbP-44" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dbeeff;strokeColor=#5a86b8;" value="◄ cross_c（场景上下文）&#xa;[B, 107, 192]&#xa;(encoder 输出)" vertex="1">
+          <mxGeometry height="80" width="240" x="1685" y="379" as="geometry" />
+        </mxCell>
+        <mxCell id="073jqp0mwhABV5Sj9pbP-45" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dbeeff;strokeColor=#5a86b8;" value="◄ route_lanes（路由车道）&#xa;[B, 25, 20, 12]" vertex="1">
+          <mxGeometry height="80" width="240" x="1985" y="379" as="geometry" />
+        </mxCell>
+        <mxCell id="073jqp0mwhABV5Sj9pbP-46" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d6f5d6;strokeColor=#4a9a4a;" value="◄ neighbor_current_mask&#xa;[B, 10] bool&#xa;(padding 邻居屏蔽)" vertex="1">
+          <mxGeometry height="80" width="200" x="2285" y="379" as="geometry" />
+        </mxCell>
+        <mxCell id="073jqp0mwhABV5Sj9pbP-47" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff1b3;strokeColor=#9c8a1f;" value="preproj&#xa;Mlp(324→512→192)&#xa;:213" vertex="1">
+          <mxGeometry height="70" width="200" x="1145" y="499" as="geometry" />
+        </mxCell>
+        <mxCell id="073jqp0mwhABV5Sj9pbP-48" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe9d6;strokeColor=#b56a30;" value="t_embedder&#xa;正弦(10000)→Linear(256→192)&#xa;→SiLU→Linear(192→192)&#xa;:214  dit.py:26" vertex="1">
+          <mxGeometry height="80" width="220" x="1425" y="499" as="geometry" />
+        </mxCell>
+        <mxCell id="073jqp0mwhABV5Sj9pbP-49" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dbeeff;strokeColor=#5a86b8;" value="RouteEncoder&#xa;Mlp(4→64)+Mixer+mean&#xa;+emb(64→192)→[B,192]&#xa;decoder.py:158/fwd:172" vertex="1">
+          <mxGeometry height="80" width="240" x="1985" y="499" as="geometry" />
+        </mxCell>
+        <mxCell id="073jqp0mwhABV5Sj9pbP-50" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff1b3;strokeColor=#9c8a1f;" value="agent_embedding&#xa;nn.Embedding(2, 192)&#xa;:212&#xa;row0=ego角色, row1=neighbor角色×10" vertex="1">
+          <mxGeometry height="80" width="240" x="1145" y="609" as="geometry" />
+        </mxCell>
+        <mxCell id="073jqp0mwhABV5Sj9pbP-51" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d6f5d6;strokeColor=#4a9a4a;" value="attn_mask = zeros[B,11]&#xa;attn_mask[:,1:] = neighbor_current_mask&#xa;:246-247" vertex="1">
+          <mxGeometry height="70" width="200" x="2285" y="499" as="geometry" />
+        </mxCell>
+        <mxCell id="073jqp0mwhABV5Sj9pbP-52" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff1b3;strokeColor=#9c8a1f;fontStyle=1;" value="x = preproj(x) + agent_embedding&#xa;► [B, 11, 192]" vertex="1">
+          <mxGeometry height="60" width="280" x="1125" y="729" as="geometry" />
+        </mxCell>
+        <mxCell id="073jqp0mwhABV5Sj9pbP-53" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe9d6;strokeColor=#b56a30;fontStyle=1;" value="y = route_encoding + t_embedder(t)&#xa;► [B, 192]  (adaLN 条件)" vertex="1">
+          <mxGeometry height="60" width="320" x="1689" y="725" as="geometry" />
+        </mxCell>
+        <mxCell id="073jqp0mwhABV5Sj9pbP-54" edge="1" parent="1" source="073jqp0mwhABV5Sj9pbP-42" style="edgeStyle=orthogonalEdgeStyle;html=1;" target="073jqp0mwhABV5Sj9pbP-47">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="073jqp0mwhABV5Sj9pbP-55" edge="1" parent="1" source="073jqp0mwhABV5Sj9pbP-43" style="edgeStyle=orthogonalEdgeStyle;html=1;" target="073jqp0mwhABV5Sj9pbP-48">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="073jqp0mwhABV5Sj9pbP-56" edge="1" parent="1" source="073jqp0mwhABV5Sj9pbP-45" style="edgeStyle=orthogonalEdgeStyle;html=1;" target="073jqp0mwhABV5Sj9pbP-49">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="073jqp0mwhABV5Sj9pbP-57" edge="1" parent="1" source="073jqp0mwhABV5Sj9pbP-46" style="edgeStyle=orthogonalEdgeStyle;html=1;" target="073jqp0mwhABV5Sj9pbP-51">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="073jqp0mwhABV5Sj9pbP-58" edge="1" parent="1" source="073jqp0mwhABV5Sj9pbP-47" style="edgeStyle=orthogonalEdgeStyle;html=1;" target="073jqp0mwhABV5Sj9pbP-52">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="073jqp0mwhABV5Sj9pbP-59" edge="1" parent="1" source="073jqp0mwhABV5Sj9pbP-50" style="edgeStyle=orthogonalEdgeStyle;html=1;" target="073jqp0mwhABV5Sj9pbP-52">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="073jqp0mwhABV5Sj9pbP-60" edge="1" parent="1" source="073jqp0mwhABV5Sj9pbP-48" style="edgeStyle=orthogonalEdgeStyle;html=1;" target="073jqp0mwhABV5Sj9pbP-53">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="073jqp0mwhABV5Sj9pbP-61" edge="1" parent="1" source="073jqp0mwhABV5Sj9pbP-49" style="edgeStyle=orthogonalEdgeStyle;html=1;" target="073jqp0mwhABV5Sj9pbP-53">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="073jqp0mwhABV5Sj9pbP-62" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff7cc;strokeColor=#c9b347;verticalAlign=top;fontStyle=1;fontSize=12;" value="DiTBlock × 3  (dit.py:66, forward:88)  —  adaLN 6*dim" vertex="1">
+          <mxGeometry height="400" width="1400" x="1075" y="839" as="geometry" />
+        </mxCell>
+        <mxCell id="073jqp0mwhABV5Sj9pbP-63" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff1b3;strokeColor=#9c8a1f;" value="◄输入← y [B,192]&#xa;►输出→ 6 个调制向量&#xa;adaLN_modulation = SiLU → Linear(192→6*192=1152)  :78-80&#xa;chunk(6) → (shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp)" vertex="1">
+          <mxGeometry height="100" width="400" x="1413" y="880" as="geometry" />
+        </mxCell>
+        <mxCell id="073jqp0mwhABV5Sj9pbP-64" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff1b3;strokeColor=#9c8a1f;" value="◄输入← x[B,11,192] + (shift_msa,scale_msa,gate_msa) + attn_mask[B,11]&#xa;►输出→ x = x + gate_msa · attn(modulate(LN(x)))  [B,11,192]&#xa;① self-attn  :93&#xa;Q=K=V=x&#39;  MultiheadAttention(192,6)  key_padding_mask=attn_mask&#xa;★ 11 agent token 互看（agent 间交互）&#xa;✅ 带 gate 残差" vertex="1">
+          <mxGeometry height="130" width="400" x="1125" y="1019" as="geometry" />
+        </mxCell>
+        <mxCell id="E-rJDpqmEksqENVSYT2i-1" edge="1" parent="1" source="073jqp0mwhABV5Sj9pbP-65" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;fontSize=12;startSize=8;endSize=8;" target="073jqp0mwhABV5Sj9pbP-66">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="073jqp0mwhABV5Sj9pbP-65" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff1b3;strokeColor=#9c8a1f;" value="◄输入← x[B,11,192] + (shift_mlp,scale_mlp,gate_mlp)&#xa;►输出→ x = x + gate_mlp · mlp1(modulate(LN(x)))  [B,11,192]&#xa;② mlp1  :96&#xa;Mlp(192→768→192, GELU)&#xa;✅ 带 gate 残差" vertex="1">
+          <mxGeometry height="130" width="340" x="1601" y="1024" as="geometry" />
+        </mxCell>
+        <mxCell id="073jqp0mwhABV5Sj9pbP-66" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dbeeff;strokeColor=#5a86b8;" value="◄输入← x[B,11,192] + cross_c[B,107,192]&#xa;►输出→ x = cross_attn(LN(x), cross_c, cross_c)  [B,11,192]&#xa;③ cross-attn  :98&#xa;Q=x&#39;  K=V=cross_c  MultiheadAttention(192,6)&#xa;★ 11 agent token 去 query 107 场景 context&#xa;❌ 无 gate、无残差、直接覆写 x" vertex="1">
+          <mxGeometry height="130" width="400" x="2017" y="899" as="geometry" />
+        </mxCell>
+        <mxCell id="073jqp0mwhABV5Sj9pbP-67" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dbeeff;strokeColor=#5a86b8;" value="◄输入← x[B,11,192]&#xa;►输出→ x = mlp2(LN(x))  [B,11,192]&#xa;④ mlp2  :99&#xa;Mlp(192→768→192, GELU)&#xa;❌ 无 gate、无残差、直接覆写 x" vertex="1">
+          <mxGeometry height="130" width="340" x="2047" y="1079" as="geometry" />
+        </mxCell>
+        <mxCell id="073jqp0mwhABV5Sj9pbP-68" edge="1" parent="1" source="073jqp0mwhABV5Sj9pbP-44" style="edgeStyle=orthogonalEdgeStyle;html=1;fontSize=9;dashed=1;" target="073jqp0mwhABV5Sj9pbP-66" value="cross_c [B,107,192]&#xa;直接作 K/V">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="2217" y="419" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="073jqp0mwhABV5Sj9pbP-69" edge="1" parent="1" source="073jqp0mwhABV5Sj9pbP-51" style="edgeStyle=orthogonalEdgeStyle;html=1;fontSize=9;dashed=1;" target="073jqp0mwhABV5Sj9pbP-64" value="attn_mask">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="073jqp0mwhABV5Sj9pbP-70" edge="1" parent="1" source="073jqp0mwhABV5Sj9pbP-63" style="edgeStyle=orthogonalEdgeStyle;html=1;" target="073jqp0mwhABV5Sj9pbP-64">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="073jqp0mwhABV5Sj9pbP-71" edge="1" parent="1" source="073jqp0mwhABV5Sj9pbP-63" style="edgeStyle=orthogonalEdgeStyle;html=1;" target="073jqp0mwhABV5Sj9pbP-65">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="073jqp0mwhABV5Sj9pbP-72" edge="1" parent="1" source="073jqp0mwhABV5Sj9pbP-64" style="edgeStyle=orthogonalEdgeStyle;html=1;" target="073jqp0mwhABV5Sj9pbP-65">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="073jqp0mwhABV5Sj9pbP-73" edge="1" parent="1" source="073jqp0mwhABV5Sj9pbP-66" style="edgeStyle=orthogonalEdgeStyle;html=1;" target="073jqp0mwhABV5Sj9pbP-67">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="073jqp0mwhABV5Sj9pbP-74" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff1b3;strokeColor=#9c8a1f;fontStyle=1;" value="◄输入← x[B,11,192] + y[B,192]&#xa;►输出→ [B,11,324]&#xa;FinalLayer  dit.py:104/fwd:124&#xa;adaLN(2向量: shift,scale) → modulate(LN(x))&#xa;proj: LN→Linear(192→768)→GELU→LN→Linear(768→324)" vertex="1">
+          <mxGeometry height="100" width="400" x="1367" y="1386" as="geometry" />
+        </mxCell>
+        <mxCell id="073jqp0mwhABV5Sj9pbP-75" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3eafa;strokeColor=#7a4fb0;fontStyle=1;" value="◄输入← [B,11,324]&#xa;►输出→ [B,11,324] score/x_start&#xa;model_type 分支:&#xa;  score: x / (marginal_prob_std(t)+1e-6)  :258&#xa;  x_start: x  :260&#xa;→ reshape [B,11,81,4] 送回 Decoder" vertex="1">
+          <mxGeometry height="120" width="400" x="1367" y="1529" as="geometry" />
+        </mxCell>
+        <mxCell id="073jqp0mwhABV5Sj9pbP-76" edge="1" parent="1" source="073jqp0mwhABV5Sj9pbP-67" style="edgeStyle=orthogonalEdgeStyle;html=1;" target="073jqp0mwhABV5Sj9pbP-74">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="073jqp0mwhABV5Sj9pbP-77" edge="1" parent="1" source="073jqp0mwhABV5Sj9pbP-74" style="edgeStyle=orthogonalEdgeStyle;html=1;" target="073jqp0mwhABV5Sj9pbP-75">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="073jqp0mwhABV5Sj9pbP-78" edge="1" parent="1" source="073jqp0mwhABV5Sj9pbP-53" style="edgeStyle=orthogonalEdgeStyle;html=1;fontSize=9;dashed=1;" target="073jqp0mwhABV5Sj9pbP-74" value="y">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="2023" y="755" />
+              <mxPoint x="2023" y="1436" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="073jqp0mwhABV5Sj9pbP-79" edge="1" parent="1" source="073jqp0mwhABV5Sj9pbP-53" style="edgeStyle=orthogonalEdgeStyle;html=1;fontSize=9;dashed=1;" target="073jqp0mwhABV5Sj9pbP-63" value="y [B,192]">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="073jqp0mwhABV5Sj9pbP-80" edge="1" parent="1" source="073jqp0mwhABV5Sj9pbP-52" style="edgeStyle=orthogonalEdgeStyle;html=1;fontSize=9;" target="073jqp0mwhABV5Sj9pbP-64" value="x [B,11,192]">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1115" y="759" />
+              <mxPoint x="1115" y="1084" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
